@@ -11,7 +11,8 @@ from app.services.rag_service import (
 from app.services.analytics_service import analyze_dataset
 
 import pandas as pd
-from pathlib import Path
+from io import BytesIO
+from app.services.dataset_storage import load_dataset
 
 
 router = APIRouter(
@@ -19,43 +20,28 @@ router = APIRouter(
     tags=["AI"]
 )
 
-DATA_DIR = Path("data")
-
-
 class QuestionRequest(BaseModel):
     dataset_id: str
     question: str
 
 
 @router.post("/ask")
-def ask_question(request: QuestionRequest):
+async def ask_question(request: QuestionRequest):
+    stored_dataset = await load_dataset(request.dataset_id)
 
-    matching_files = list(
-        DATA_DIR.glob(f"{request.dataset_id}.*")
-    )
-
-    if not matching_files:
+    if stored_dataset is None:
         raise HTTPException(
             status_code=404,
             detail="Dataset not found"
         )
 
-    file_path = matching_files[0]
+    extension, contents = stored_dataset
 
     try:
-
-        # Load dataset
-        if file_path.suffix.lower() == ".csv":
-            dataframe = pd.read_csv(file_path)
-
-        elif file_path.suffix.lower() == ".xlsx":
-            dataframe = pd.read_excel(file_path)
-
+        if extension == ".csv":
+            dataframe = pd.read_csv(BytesIO(contents))
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file format"
-            )
+            dataframe = pd.read_excel(BytesIO(contents))
 
         # -----------------------------------
         # 1. PROFILE DATASET

@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const API_URL = "/api";
+const API_URL = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");

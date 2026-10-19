@@ -7,3 +7,4 @@ python-dotenv
 groq
 numpy
 scikit-learn
+vercel-blob>=0.5.0

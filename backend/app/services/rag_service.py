@@ -1,87 +1,57 @@
-from sentence_transformers import SentenceTransformer
-import faiss
+from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 
 
-# Local embedding model
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
+# TF-IDF based lightweight retrieval
+vectorizer = TfidfVectorizer(
+    lowercase=True,
+    stop_words="english"
 )
 
-
-# Get embedding dimension
-embedding_dimension = (
-    embedding_model.get_sentence_embedding_dimension()
-)
-
-
-# Create FAISS vector index
-index = faiss.IndexFlatL2(embedding_dimension)
-
-
-# Store original documents
 documents = []
+document_vectors = None
 
 
 def add_documents(texts):
-
-    global index
     global documents
+    global document_vectors
 
-    # Clear existing vectors
-    index.reset()
+    documents = list(texts)
 
-    # Clear existing documents
-    documents.clear()
+    if not documents:
+        document_vectors = None
+        return
 
-    embeddings = embedding_model.encode(
-        texts,
-        convert_to_numpy=True
-    )
-
-    embeddings = np.array(
-        embeddings,
-        dtype="float32"
-    )
-
-    index.add(embeddings)
-
-    documents.extend(texts)
+    document_vectors = vectorizer.fit_transform(documents)
 
 
 def search_documents(query, top_k=3):
 
-    query_embedding = embedding_model.encode(
-        [query],
-        convert_to_numpy=True
-    )
+    if not documents or document_vectors is None:
+        return []
 
-    query_embedding = np.array(
-        query_embedding,
-        dtype="float32"
-    )
+    query_vector = vectorizer.transform([query])
 
-    distances, indices = index.search(
-        query_embedding,
-        top_k
-    )
+    scores = (
+        document_vectors @ query_vector.T
+    ).toarray().flatten()
+
+    top_indices = np.argsort(scores)[::-1][:top_k]
 
     results = []
 
-    for idx in indices[0]:
-
-        if idx != -1 and idx < len(documents):
-            results.append(documents[idx])
+    for index in top_indices:
+        if scores[index] > 0:
+            results.append(documents[index])
 
     return results
 
 
 def create_profile_documents(profile):
 
-    documents = []
+    profile_documents = []
 
-    # Overall dataset information
-    documents.append(
+    profile_documents.append(
         f"""
 Dataset overview:
 Rows: {profile['rows']}
@@ -90,7 +60,6 @@ Duplicate rows: {profile['duplicate_rows']}
 """
     )
 
-    # Create one document for each column
     for column in profile["column_details"]:
 
         document = f"""
@@ -103,7 +72,6 @@ Unique values: {column['unique_values']}
 Sample values: {column['sample_values']}
 """
 
-        # Add numerical statistics if available
         if "statistics" in column:
 
             statistics = column["statistics"]
@@ -116,6 +84,6 @@ Median: {statistics['median']}
 Standard deviation: {statistics['standard_deviation']}
 """
 
-        documents.append(document)
+        profile_documents.append(document)
 
-    return documents
+    return profile_documents

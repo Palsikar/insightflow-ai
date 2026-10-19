@@ -5,17 +5,13 @@ from pathlib import Path
 import uuid
 
 from app.services.data_profiler import profile_dataset
+from app.services.dataset_storage import load_dataset, save_dataset
 
 
 router = APIRouter(
-   prefix="/datasets",
+   prefix="/api/datasets",
     tags=["Datasets"]
 )
-
-
-# Folder where uploaded datasets are stored
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/upload")
@@ -49,12 +45,7 @@ async def upload_dataset(file: UploadFile = File(...)):
         # Get file extension
         extension = Path(original_filename).suffix.lower()
 
-        # Create path for saved dataset
-        saved_path = DATA_DIR / f"{dataset_id}{extension}"
-
-        # Save the dataset
-        with open(saved_path, "wb") as output_file:
-            output_file.write(contents)
+        await save_dataset(dataset_id, extension, contents)
 
         # Read dataset using Pandas
         if extension == ".csv":
@@ -82,40 +73,28 @@ async def upload_dataset(file: UploadFile = File(...)):
 
 
 @router.get("/{dataset_id}/profile")
-def get_dataset_profile(dataset_id: str):
+async def get_dataset_profile(dataset_id: str):
+    stored_dataset = await load_dataset(dataset_id)
 
-    # Find dataset using its ID
-    matching_files = list(DATA_DIR.glob(f"{dataset_id}.*"))
-
-    if not matching_files:
+    if stored_dataset is None:
         raise HTTPException(
             status_code=404,
             detail="Dataset not found"
         )
 
-    file_path = matching_files[0]
+    extension, contents = stored_dataset
 
     try:
-
-        # Read the saved dataset
-        if file_path.suffix.lower() == ".csv":
-            dataframe = pd.read_csv(file_path)
-
-        elif file_path.suffix.lower() == ".xlsx":
-            dataframe = pd.read_excel(file_path)
-
+        if extension == ".csv":
+            dataframe = pd.read_csv(BytesIO(contents))
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file format"
-            )
+            dataframe = pd.read_excel(BytesIO(contents))
 
-        # Generate profile
         profile = profile_dataset(dataframe)
 
         return {
             "dataset_id": dataset_id,
-            "filename": file_path.name,
+            "filename": f"{dataset_id}{extension}",
             "profile": profile
         }
 
