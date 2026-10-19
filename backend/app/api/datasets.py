@@ -8,7 +8,7 @@ from app.services.data_profiler import profile_dataset
 
 
 router = APIRouter(
-    prefix="/datasets",
+   prefix="/datasets",
     tags=["Datasets"]
 )
 
