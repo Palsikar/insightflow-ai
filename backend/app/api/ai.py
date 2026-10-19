@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 router = APIRouter(
-    prefix="/ai",
+   prefix="/api/ai",
     tags=["AI"]
 )
 
